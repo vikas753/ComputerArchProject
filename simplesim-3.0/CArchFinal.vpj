@@ -1,0 +1,389 @@
+<!DOCTYPE Project SYSTEM "http://www.slickedit.com/dtd/vse/10.0/vpj.dtd">
+<Project
+    Version="10.0"
+    VendorName="SlickEdit"
+    TemplateName="Other C/C++"
+    WorkingDir=".">
+    <Config
+        Name="Debug"
+        Type="cpp"
+        DebugCallbackName="gdb"
+        OutputFile="%bdCArchFinal"
+        CompilerConfigName="Latest Version">
+        <Menu>
+            <Target
+                Name="Compile"
+                MenuCaption="&amp;Compile"
+                CaptureOutputWith="ProcessBuffer"
+                OutputExts="*.o"
+                SaveOption="SaveCurrent"
+                RunFromDir="%rw">
+                <Exec CmdLine='cc -c -g %i %defd -o "%bd%n.o" "%f"'/>
+            </Target>
+            <Target
+                Name="Link"
+                MenuCaption="&amp;Link">
+                <Exec CmdLine='cc -g -o "%o" %f %libs'/>
+            </Target>
+            <Target
+                Name="Build"
+                MenuCaption="&amp;Build"
+                CaptureOutputWith="ProcessBuffer"
+                SaveOption="SaveWorkspaceFiles"
+                RunFromDir="%rw">
+                <Exec CmdLine='"%(VSLICKBIN1)vsbuild" build "%w" "%r"'/>
+            </Target>
+            <Target
+                Name="Rebuild"
+                MenuCaption="&amp;Rebuild"
+                CaptureOutputWith="ProcessBuffer"
+                SaveOption="SaveWorkspaceFiles"
+                RunFromDir="%rw">
+                <Exec CmdLine='"%(VSLICKBIN1)vsbuild" rebuild "%w" "%r"'/>
+            </Target>
+            <Target
+                Name="Debug"
+                MenuCaption="&amp;Debug"
+                SaveOption="SaveNone"
+                BuildFirst="1"
+                CaptureOutputWith="ProcessBuffer"
+                RunFromDir="%rw">
+                <Exec CmdLine='vsdebugio -prog "%o"'/>
+            </Target>
+            <Target
+                Name="Execute"
+                MenuCaption="E&amp;xecute"
+                SaveOption="SaveNone"
+                BuildFirst="1"
+                CaptureOutputWith="ProcessBuffer"
+                RunFromDir="%rw">
+                <Exec CmdLine='"%o"'/>
+            </Target>
+        </Menu>
+    </Config>
+    <Config
+        Name="Release"
+        Type="cpp"
+        DebugCallbackName="gdb"
+        OutputFile="%bdCArchFinal"
+        CompilerConfigName="Latest Version">
+        <Menu>
+            <Target
+                Name="Compile"
+                MenuCaption="&amp;Compile"
+                CaptureOutputWith="ProcessBuffer"
+                SaveOption="SaveCurrent"
+                OutputExts="*.o"
+                RunFromDir="%rw">
+                <Exec CmdLine='cc -c -O %i %defd -o "%bd%n.o" "%f"'/>
+            </Target>
+            <Target
+                Name="Link"
+                MenuCaption="&amp;Link">
+                <Exec CmdLine='cc -O -o "%o" %f %libs'/>
+            </Target>
+            <Target
+                Name="Build"
+                MenuCaption="&amp;Build"
+                CaptureOutputWith="ProcessBuffer"
+                SaveOption="SaveWorkspaceFiles"
+                RunFromDir="%rw">
+                <Exec CmdLine='"%(VSLICKBIN1)vsbuild" build "%w" "%r"'/>
+            </Target>
+            <Target
+                Name="Rebuild"
+                MenuCaption="&amp;Rebuild"
+                CaptureOutputWith="ProcessBuffer"
+                SaveOption="SaveWorkspaceFiles"
+                RunFromDir="%rw">
+                <Exec CmdLine='"%(VSLICKBIN1)vsbuild" rebuild "%w" "%r"'/>
+            </Target>
+            <Target
+                Name="Debug"
+                MenuCaption="&amp;Debug"
+                SaveOption="SaveNone"
+                BuildFirst="1"
+                CaptureOutputWith="ProcessBuffer"
+                RunFromDir="%rw">
+                <Exec CmdLine='vsdebugio -prog "%o"'/>
+            </Target>
+            <Target
+                Name="Execute"
+                MenuCaption="E&amp;xecute"
+                SaveOption="SaveNone"
+                BuildFirst="1"
+                CaptureOutputWith="ProcessBuffer"
+                RunFromDir="%rw">
+                <Exec CmdLine='"%o"'/>
+            </Target>
+        </Menu>
+    </Config>
+    <Rules Name="Compile">
+        <Rule
+            InputExts="*.s"
+            OutputExts="*.o"
+            LinkObject="1">
+            <Exec CmdLine='as -o "%bd%n.o" "%f"'/>
+        </Rule>
+    </Rules>
+    <Files>
+        <Folder
+            Name="Source Files"
+            Filters="*.c;*.C;*.cc;*.cpp;*.cp;*.cxx;*.c++;*.prg;*.pas;*.dpr;*.asm;*.s;*.bas;*.java;*.cs;*.sc;*.scala;*.e;*.cob;*.html;*.rc;*.tcl;*.py;*.pl;*.d;*.m;*.mm;*.go;*.groovy;*.gsh"
+            GUID="{6503227F-87E5-4B99-9C1B-200E6C1600A7}">
+            <F N="target-alpha/alpha.c"/>
+            <F N="tests-alpha/src/anagram.c"/>
+            <F N="tests-pisa/src/anagram.c"/>
+            <F N="bpred.c"/>
+            <F N="cache.c"/>
+            <F N="dlite.c"/>
+            <F N="eio.c"/>
+            <F N="endian.c"/>
+            <F N="eval.c"/>
+            <F N="eventq.c"/>
+            <F N="libexo/exo-test.c"/>
+            <F N="libexo/exolex.c"/>
+            <F N="libexo/libexo.c"/>
+            <F N="loader.c"/>
+            <F N="target-alpha/loader.c"/>
+            <F N="target-pisa/loader.c"/>
+            <F N="machine.c"/>
+            <F N="main.c"/>
+            <F N="memory.c"/>
+            <F N="misc.c"/>
+            <F N="options.c"/>
+            <F N="pipeview.pl"/>
+            <F N="target-pisa/pisa.c"/>
+            <F N="ptrace.c"/>
+            <F N="range.c"/>
+            <F N="regs.c"/>
+            <F N="resource.c"/>
+            <F N="sim-bpred.c"/>
+            <F N="sim-cache.c"/>
+            <F N="sim-eio.c"/>
+            <F N="sim-fast.c"/>
+            <F N="sim-outorder.c"/>
+            <F N="sim-profile.c"/>
+            <F N="sim-safe.c"/>
+            <F N="stats.c"/>
+            <F N="symbol.c"/>
+            <F N="target-alpha/symbol.c"/>
+            <F N="target-pisa/symbol.c"/>
+            <F N="syscall.c"/>
+            <F N="target-alpha/syscall.c"/>
+            <F N="target-pisa/syscall.c"/>
+            <F N="sysprobe.c"/>
+            <F N="tests-pisa/src/test-as.s"/>
+            <F N="tests-alpha/src/test-dirent.c"/>
+            <F N="tests-alpha/src/test-fmath.c"/>
+            <F N="tests-pisa/src/test-fmath.c"/>
+            <F N="tests-alpha/src/test-llong.c"/>
+            <F N="tests-pisa/src/test-llong.c"/>
+            <F N="tests-alpha/src/test-lswlr.c"/>
+            <F N="tests-pisa/src/test-lswlr.c"/>
+            <F N="tests-alpha/src/test-math.c"/>
+            <F N="tests-pisa/src/test-math.c"/>
+            <F N="tests-alpha/src/test-printf.c"/>
+            <F N="tests-pisa/src/test-printf.c"/>
+            <F N="textprof.pl"/>
+        </Folder>
+        <Folder
+            Name="Header Files"
+            Filters="*.h;*.H;*.hh;*.hpp;*.hxx;*.h++;*.inc;*.sh;*.cpy;*.if"
+            GUID="{2B8D9D47-B8E3-4E9B-8160-80018AAD1EC9}">
+            <F N="target-alpha/alpha.h"/>
+            <F N="bitmap.h"/>
+            <F N="bpred.h"/>
+            <F N="cache.h"/>
+            <F N="config.h"/>
+            <F N="target-alpha/config.h"/>
+            <F N="target-pisa/config.h"/>
+            <F N="target-pisa/configbig.h"/>
+            <F N="target-pisa/configlit.h"/>
+            <F N="dlite.h"/>
+            <F N="target-alpha/ecoff.h"/>
+            <F N="target-pisa/ecoff.h"/>
+            <F N="eio.h"/>
+            <F N="endian.h"/>
+            <F N="eval.h"/>
+            <F N="eventq.h"/>
+            <F N="host.h"/>
+            <F N="libexo/libexo.h"/>
+            <F N="loader.h"/>
+            <F N="machine.h"/>
+            <F N="memory.h"/>
+            <F N="misc.h"/>
+            <F N="options.h"/>
+            <F N="target-pisa/pisa.h"/>
+            <F N="ptrace.h"/>
+            <F N="range.h"/>
+            <F N="redir.sh"/>
+            <F N="regress.sh"/>
+            <F N="regs.h"/>
+            <F N="resource.h"/>
+            <F N="sim.h"/>
+            <F N="stats.h"/>
+            <F N="symbol.h"/>
+            <F N="syscall.h"/>
+            <F N="version.h"/>
+        </Folder>
+        <Folder
+            Name="Resource Files"
+            Filters="*.ico;*.cur;*.dlg"
+            GUID="{4BC11EF7-91DB-4E8E-B1D3-55259B82B343}"/>
+        <Folder
+            Name="Bitmaps"
+            Filters="*.bmp"
+            GUID="{63AC23BF-D551-4083-98A4-9841BAD2C881}"/>
+        <Folder
+            Name="Other Files"
+            Filters=""
+            GUID="{33459F2D-595A-487C-A6C3-E6BDE80225B9}">
+            <F N="target-alpha/alpha.def"/>
+            <F N="tests-alpha/bin/anagram"/>
+            <F N="tests-pisa/bin.big/anagram"/>
+            <F N="tests-pisa/bin.little/anagram"/>
+            <F N="tests-alpha/eio/anagram.eio"/>
+            <F N="tests-pisa/eio.big/anagram.eio"/>
+            <F N="tests-pisa/eio.little/anagram.eio"/>
+            <F N="tests-alpha/outputs/anagram.progout"/>
+            <F N="tests-pisa/outputs/anagram.progout"/>
+            <F N="tests-alpha/outputs/anagram.simout"/>
+            <F N="tests-pisa/outputs/anagram.simout"/>
+            <F N="ANNOUNCE-3.0"/>
+            <F N="bpred.o"/>
+            <F N="cache.o"/>
+            <F N="CArchFinal.vpj"/>
+            <F N="CArchFinal.vpw"/>
+            <F N="CArchFinal.vpwhist"/>
+            <F N="CONTRIBUTORS"/>
+            <F N="config/default.cfg"/>
+            <F N="dlite.o"/>
+            <F N="eio.o"/>
+            <F N="endian.o"/>
+            <F N="eval.o"/>
+            <F N="libexo/exolex.l"/>
+            <F N="libexo/exolex.o"/>
+            <F N="FAQ"/>
+            <F N="libexo/FOO.exo"/>
+            <F N="libexo/FOO.exo.gz"/>
+            <F N="libexo/FOO1.exo"/>
+            <F N="libexo/FOOBAR.exo"/>
+            <F N="libexo/FOOBAR1.exo"/>
+            <F N="hack_guide.pdf"/>
+            <F N="hack_guide.ps"/>
+            <F N="tests-alpha/inputs/input.txt"/>
+            <F N="tests-pisa/inputs/input.txt"/>
+            <F N="libexo/libexo.a"/>
+            <F N="libexo/libexo.o"/>
+            <F N="LICENSE"/>
+            <F N="loader.o"/>
+            <F N="machine.def"/>
+            <F N="machine.o"/>
+            <F N="main.o"/>
+            <F N="Makefile"/>
+            <F N="libexo/Makefile"/>
+            <F N="tests-alpha/Makefile"/>
+            <F N="tests-alpha/src/Makefile"/>
+            <F N="tests-pisa/Makefile"/>
+            <F N="tests-pisa/bin.big/Makefile"/>
+            <F N="tests-pisa/bin.little/Makefile"/>
+            <F N="tests-pisa/src/Makefile"/>
+            <F N="memory.o"/>
+            <F N="misc.o"/>
+            <F N="options.o"/>
+            <F N="target-pisa/pisa.def"/>
+            <F N="PROJECTS"/>
+            <F N="ptrace.o"/>
+            <F N="range.o"/>
+            <F N="README"/>
+            <F N="README.eio"/>
+            <F N="README.retarget"/>
+            <F N="README.sim-inorder"/>
+            <F N="README.windows"/>
+            <F N="redir.bash"/>
+            <F N="config/regress.cfg"/>
+            <F N="regs.o"/>
+            <F N="config/relax.cfg"/>
+            <F N="resource.o"/>
+            <F N="sim-bpred"/>
+            <F N="sim-bpred.o"/>
+            <F N="sim-cache"/>
+            <F N="sim-cache.o"/>
+            <F N="sim-eio"/>
+            <F N="sim-eio.o"/>
+            <F N="sim-fast"/>
+            <F N="sim-fast.o"/>
+            <F N="sim-outorder"/>
+            <F N="sim-outorder.o"/>
+            <F N="sim-profile"/>
+            <F N="sim-profile.o"/>
+            <F N="sim-safe"/>
+            <F N="sim-safe.o"/>
+            <F N="stats.o"/>
+            <F N="symbol.o"/>
+            <F N="syscall.o"/>
+            <F N="sysprobe"/>
+            <F N="libexo/sysprobe"/>
+            <F N="tests-alpha/sysprobe"/>
+            <F N="tests-pisa/sysprobe"/>
+            <F N="tests-alpha/bin/test-args"/>
+            <F N="tests-pisa/src/test-as.OUT"/>
+            <F N="tests-alpha/bin/test-dirent"/>
+            <F N="tests-alpha/bin/test-fmath"/>
+            <F N="tests-pisa/bin.big/test-fmath"/>
+            <F N="tests-pisa/bin.little/test-fmath"/>
+            <F N="tests-alpha/eio/test-fmath.eio"/>
+            <F N="tests-pisa/eio.big/test-fmath.eio"/>
+            <F N="tests-pisa/eio.little/test-fmath.eio"/>
+            <F N="tests-alpha/outputs/test-fmath.progout"/>
+            <F N="tests-pisa/outputs/test-fmath.progout"/>
+            <F N="tests-alpha/outputs/test-fmath.simout"/>
+            <F N="tests-pisa/outputs/test-fmath.simout"/>
+            <F N="tests-alpha/bin/test-llong"/>
+            <F N="tests-pisa/bin.big/test-llong"/>
+            <F N="tests-pisa/bin.little/test-llong"/>
+            <F N="tests-alpha/eio/test-llong.eio"/>
+            <F N="tests-pisa/eio.big/test-llong.eio"/>
+            <F N="tests-pisa/eio.little/test-llong.eio"/>
+            <F N="tests-alpha/outputs/test-llong.progout"/>
+            <F N="tests-pisa/outputs/test-llong.progout"/>
+            <F N="tests-alpha/outputs/test-llong.simout"/>
+            <F N="tests-pisa/outputs/test-llong.simout"/>
+            <F N="tests-alpha/bin/test-lswlr"/>
+            <F N="tests-pisa/bin.big/test-lswlr"/>
+            <F N="tests-pisa/bin.little/test-lswlr"/>
+            <F N="tests-alpha/eio/test-lswlr.eio"/>
+            <F N="tests-pisa/eio.big/test-lswlr.eio"/>
+            <F N="tests-pisa/eio.little/test-lswlr.eio"/>
+            <F N="tests-alpha/outputs/test-lswlr.progout"/>
+            <F N="tests-pisa/outputs/test-lswlr.progout"/>
+            <F N="tests-alpha/outputs/test-lswlr.simout"/>
+            <F N="tests-pisa/outputs/test-lswlr.simout"/>
+            <F N="tests-alpha/bin/test-math"/>
+            <F N="tests-pisa/bin.big/test-math"/>
+            <F N="tests-pisa/bin.little/test-math"/>
+            <F N="tests-alpha/eio/test-math.eio"/>
+            <F N="tests-pisa/eio.big/test-math.eio"/>
+            <F N="tests-pisa/eio.little/test-math.eio"/>
+            <F N="tests-alpha/outputs/test-math.progout"/>
+            <F N="tests-pisa/outputs/test-math.progout"/>
+            <F N="tests-alpha/outputs/test-math.simout"/>
+            <F N="tests-pisa/outputs/test-math.simout"/>
+            <F N="tests-alpha/bin/test-printf"/>
+            <F N="tests-pisa/bin.big/test-printf"/>
+            <F N="tests-pisa/bin.little/test-printf"/>
+            <F N="tests-alpha/eio/test-printf.eio"/>
+            <F N="tests-pisa/eio.big/test-printf.eio"/>
+            <F N="tests-pisa/eio.little/test-printf.eio"/>
+            <F N="tests-alpha/outputs/test-printf.progout"/>
+            <F N="tests-pisa/outputs/test-printf.progout"/>
+            <F N="tests-alpha/outputs/test-printf.simout"/>
+            <F N="tests-pisa/outputs/test-printf.simout"/>
+            <F N="tests"/>
+            <F N="WARRANTY"/>
+            <F N="tests-alpha/inputs/words"/>
+            <F N="tests-pisa/inputs/words"/>
+        </Folder>
+    </Files>
+</Project>

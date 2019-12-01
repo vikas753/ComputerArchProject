@@ -721,6 +721,217 @@ dcache_access_fn(struct mem_t *mem,	/* memory space to access */
       sys_syscall(&regs, mem_access, mem, INST, TRUE))			\
    : sys_syscall(&regs, dcache_access_fn, mem, INST, TRUE))
 
+
+/* For the history order to work correctly it should be either 1 or some value greater than 4 */
+#define ORDER_VALUE_PREDICTOR 5
+
+/* Prediction Hysterisis State machine specifications ( Example below is a 2-bit counter ) */
+#define NUM_BITS_PREDICTION_HYSTERISIS_COUNTER 2
+#define MID_PREDICTION_DECISION_THRESHOLD (1 << (NUM_BITS_PREDICTION_HYSTERISIS_COUNTER-1))
+#define SATURATING_COUNTER_MASK ((1 << NUM_BITS_PREDICTION_HYSTERISIS_COUNTER) - 1)
+
+/* NO_PREDICTION : indicates , on prediction to be not trusted and correct prediction opposite of the
+   same */
+#define NO_PREDICTION 0
+#define CORRECT_PREDICTION 1
+
+/* Value Prediction History Table indexed by Program counter */
+typedef struct
+{
+  sqword_t PredictionHysterisCounter;  /*< Stores the prediction state history >*/
+  sqword_t ValuePredicted;   /*< Returns the Value Predicted based on Value History buffer >*/
+  #define INVALID_VALUE_HISTORY_ENTRY -1
+  sqword_t ValueHistoryArray[ORDER_VALUE_PREDICTOR];  /*< Value History Array which would be used to make a prediction */
+  int ValidBit;
+  int numCorrectPredictions;
+  int numMisCorrectPredictions;
+  int numNonPredictions;
+} value_prediction_table_entry_t;
+
+/* Number of entries in value prediction table */
+#define NUM_VALUE_PREDICTION_TABLE_ENTRIES 4096
+
+/* To get lower 12 bits of PC address */
+#define PC_ADDRESS_MASK (NUM_VALUE_PREDICTION_TABLE_ENTRIES - 1)
+
+/* Get Index from PC address */
+#define GET_INDEX(PC_ADDR) PC_ADDR & PC_ADDRESS_MASK
+
+/* Minimum order of value predictor */
+#define MIN_ORDER_VALUE_PREDICTOR 1
+
+value_prediction_table_entry_t value_prediction_table[NUM_VALUE_PREDICTION_TABLE_ENTRIES];
+
+/* Initialize the Value prediction table and value history array with invalid values in beginning for marking purpose */
+void InitPredictionTable()
+{
+  for (int i=0;i<NUM_VALUE_PREDICTION_TABLE_ENTRIES;i++) 
+  {
+    for (int j=0;j<ORDER_VALUE_PREDICTOR;j++) 
+    {
+      value_prediction_table[i].ValueHistoryArray[j] = INVALID_VALUE_HISTORY_ENTRY;
+    }
+  }
+}
+
+/* Calculate size of a the value history array */
+int getSizeValueHistoryArray(sqword_t PCAddress)
+{
+  int size = 0;
+  for (int i=0;i < ORDER_VALUE_PREDICTOR; i++) {
+    if(value_prediction_table[GET_INDEX(PCAddress)].ValueHistoryArray[i] != INVALID_VALUE_HISTORY_ENTRY)
+    {
+      size++;
+      value_prediction_table[GET_INDEX(PCAddress)].ValueHistoryArray[i];
+    }
+  }
+  return size;
+}
+
+
+sqword_t value_history_ptr[ORDER_VALUE_PREDICTOR];
+
+/* Calculate the predicted value */
+sqword_t getPredictedValue(sqword_t PCAddress)
+{  
+
+  for (int i=0;i<ORDER_VALUE_PREDICTOR;i++) 
+  {
+    value_history_ptr[i] = value_prediction_table[GET_INDEX(PCAddress)].ValueHistoryArray[i];
+  }
+  int LastIndex = getSizeValueHistoryArray(PCAddress);
+  if (LastIndex > MIN_ORDER_VALUE_PREDICTOR) 
+  {
+    sqword_t num_occurences[ORDER_VALUE_PREDICTOR];
+    sqword_t diffValHistoryTableEntries = value_history_ptr[1] - value_history_ptr[0];
+    int diffNotSet = 0 , maxOccurencesIndex = 0 , maxOccurencesVal = 0;
+
+    for (int i=0;i <= LastIndex;i++) {
+      if ((value_history_ptr[i + 1] - value_history_ptr[i]) != diffValHistoryTableEntries)
+      {
+        diffNotSet = 1;    
+      }  
+    }
+
+    // Search for a number with maximum occurences and return it , if the difference is not set
+    // If the difference is set ( that means it is a stride with constant value difference ) then return the same 
+    sqword_t maxOccurencesIndexVal = value_history_ptr[0];
+    if (diffNotSet == 1) {
+      for (int i=0;i<=LastIndex;i++) {
+        if (value_history_ptr[i] != INVALID_VALUE_HISTORY_ENTRY)
+        {
+          num_occurences[i] = num_occurences[i] + 1;
+          for (int j=i+1;j<=LastIndex;j++) 
+          {
+            if (value_history_ptr[i] == value_history_ptr[j]) 
+            {
+              num_occurences[i] = num_occurences[i] + 1;
+              value_history_ptr[j] = INVALID_VALUE_HISTORY_ENTRY;
+              j--;
+              if (num_occurences[i] > maxOccurencesVal) 
+              {
+                maxOccurencesIndexVal = value_history_ptr[i];
+                maxOccurencesVal = num_occurences[i]; 
+              }
+            }
+          }
+        }
+      }
+      return maxOccurencesIndexVal;
+    }
+    else
+    {
+      return (value_history_ptr[LastIndex] + diffValHistoryTableEntries);
+    }
+  }
+  else
+  {
+    if((value_prediction_table[GET_INDEX(PCAddress)].ValidBit) == 1)
+    {
+      return value_history_ptr[0];
+    }
+    else
+    {
+      return 0;
+    }
+  }
+}
+
+// Update the value prediction table with required values being pushed 
+// and prediction history state machine being updated
+void updateValuePredictionTable(sqword_t PCAddress , sqword_t predictedValue , sqword_t actualValue)
+{
+  value_prediction_table[GET_INDEX(PCAddress)].ValidBit = 1;
+  int sizeVHArray = getSizeValueHistoryArray(PCAddress);
+
+  if (sizeVHArray < (ORDER_VALUE_PREDICTOR-1)) 
+  {
+    value_prediction_table[GET_INDEX(PCAddress)].ValueHistoryArray[sizeVHArray] = actualValue;   
+  }
+  else
+  {
+    for (int i = 0; i < (ORDER_VALUE_PREDICTOR - 1); i++)
+    {
+      value_prediction_table[GET_INDEX(PCAddress)].ValueHistoryArray[i] = value_prediction_table[GET_INDEX(PCAddress)].ValueHistoryArray[i+1]; 
+    }
+    value_prediction_table[GET_INDEX(PCAddress)].ValueHistoryArray[ORDER_VALUE_PREDICTOR - 1] = actualValue;
+  }
+  
+
+  if (actualValue == predictedValue) {
+    value_prediction_table[GET_INDEX(PCAddress)].PredictionHysterisCounter = (value_prediction_table[GET_INDEX(PCAddress)].PredictionHysterisCounter + 1) & SATURATING_COUNTER_MASK;
+    if(GetPredictionDecision(PCAddress) != NO_PREDICTION)
+    {
+      value_prediction_table[GET_INDEX(PCAddress)].numCorrectPredictions++; 
+    }
+    else
+    {
+      value_prediction_table[GET_INDEX(PCAddress)].numNonPredictions++;
+    }
+  }
+  else
+  {
+    value_prediction_table[GET_INDEX(PCAddress)].PredictionHysterisCounter = (value_prediction_table[GET_INDEX(PCAddress)].PredictionHysterisCounter - 1);
+    if(value_prediction_table[GET_INDEX(PCAddress)].PredictionHysterisCounter < 0)
+    {
+      value_prediction_table[GET_INDEX(PCAddress)].PredictionHysterisCounter = 0;
+    }
+    if(GetPredictionDecision(PCAddress) != NO_PREDICTION)
+    {
+      value_prediction_table[GET_INDEX(PCAddress)].numMisCorrectPredictions++;
+    }
+    else
+    {
+      value_prediction_table[GET_INDEX(PCAddress)].numNonPredictions++;    
+    }
+  }
+  fprintf(stderr, "PrT : PCAddress : %08p , numCorrectPredictions : %08p , numMisCorrectPredictions : %08p , numNonPredictions : %08p , ActualVal : %08p , PredictedVal : %08p \n" , PCAddress , value_prediction_table[GET_INDEX(PCAddress)].numCorrectPredictions , value_prediction_table[GET_INDEX(PCAddress)].numMisCorrectPredictions , value_prediction_table[GET_INDEX(PCAddress)].numNonPredictions , actualValue , predictedValue);
+
+}
+
+// returns the decision of whether predicted value to be taken or not
+int GetPredictionDecision(sqword_t PCAddress)
+{
+  if(value_prediction_table[GET_INDEX(PCAddress)].PredictionHysterisCounter < MID_PREDICTION_DECISION_THRESHOLD) 
+  {
+    return NO_PREDICTION;
+  }
+  else
+  {
+    return CORRECT_PREDICTION;
+  }
+}
+
+// Display THe prediction table stats
+void DisplayPredictionTable()
+{
+  for(int i=0;i<NUM_VALUE_PREDICTION_TABLE_ENTRIES;i++)
+  {
+    fprintf(stderr, "index : %d ,  num_correct_predictions : %08p , num_incorrect_predictions : %08p , validBit : %d \n" , i , \ 
+              value_prediction_table[i].numCorrectPredictions , value_prediction_table[i].numMisCorrectPredictions , value_prediction_table[i].ValidBit );
+  }
+}
+
 /* start simulation, program loaded, processor precise state initialized */
 void
 sim_main(void)
@@ -795,6 +1006,21 @@ sim_main(void)
       if (MD_OP_FLAGS(op) & F_MEM)
 	{
 	  sim_num_refs++;
+      if (MD_OP_FLAGS(op) & F_LOAD)
+      {
+        // Read the Load address ( RB ) , Value post execution of load operation ( RA - floating and int )
+        sqword_t _address = 0 , _valint = 0 , _valFp = 0.0 , regPC = regs.regs_PC;	
+        enum md_fault_type _fault;				
+
+        _address = GPR(RB) + SEXT(OFS);
+
+        _valint = GPR(RA);
+
+        _valFp = FPR(RA);
+        //fprintf(stderr, "PC : regs.regs_PC : %08p ,  Address : %08p , int Val : %08p , Floating point Val : %08p \n" , regs.regs_PC , _address , _valint , _valFp);
+        updateValuePredictionTable(regPC,getPredictedValue(regPC),_valint); 
+         }
+
 	  if (MD_OP_FLAGS(op) & F_STORE)
 	    is_write = TRUE;
 	}
@@ -826,8 +1052,17 @@ sim_main(void)
       regs.regs_PC = regs.regs_NPC;
       regs.regs_NPC += sizeof(md_inst_t);
 
+
       /* finish early? */
       if (max_insts && sim_num_insn >= max_insts)
-	return;
+      {
+        fprintf(stderr, "VIKASV");
+        DisplayPredictionTable();
+        return;
+      }
     }
+    
+    fprintf(stderr, "VIKASV");
+    DisplayPredictionTable();
+
 }
