@@ -722,9 +722,6 @@ dcache_access_fn(struct mem_t *mem,	/* memory space to access */
    : sys_syscall(&regs, dcache_access_fn, mem, INST, TRUE))
 
 
-/* For the history order to work correctly it should be either 1 or some value greater than 4 */
-#define ORDER_VALUE_PREDICTOR 5
-
 /* Prediction Hysterisis State machine specifications ( Example below is a 2-bit counter ) */
 #define NUM_BITS_PREDICTION_HYSTERISIS_COUNTER 2
 #define MID_PREDICTION_DECISION_THRESHOLD (1 << (NUM_BITS_PREDICTION_HYSTERISIS_COUNTER-1))
@@ -734,22 +731,6 @@ dcache_access_fn(struct mem_t *mem,	/* memory space to access */
    same */
 #define NO_PREDICTION 0
 #define CORRECT_PREDICTION 1
-
-/* Value Prediction History Table indexed by Program counter */
-typedef struct
-{
-  sqword_t PredictionHysterisCounter;  /*< Stores the prediction state history >*/
-  sqword_t ValuePredicted;   /*< Returns the Value Predicted based on Value History buffer >*/
-  #define INVALID_VALUE_HISTORY_ENTRY -1
-  sqword_t ValueHistoryArray[ORDER_VALUE_PREDICTOR];  /*< Value History Array which would be used to make a prediction */
-  int ValidBit;
-  int numCorrectPredictions;
-  int numMisCorrectPredictions;
-  int numNonPredictions;
-} value_prediction_table_entry_t;
-
-/* Number of entries in value prediction table */
-#define NUM_VALUE_PREDICTION_TABLE_ENTRIES 4096
 
 /* To get lower 12 bits of PC address */
 #define PC_ADDRESS_MASK (NUM_VALUE_PREDICTION_TABLE_ENTRIES - 1)
@@ -767,6 +748,7 @@ void InitPredictionTable()
 {
   for (int i=0;i<NUM_VALUE_PREDICTION_TABLE_ENTRIES;i++) 
   {
+    value_prediction_table[i].PredictionHysterisCounter = MID_PREDICTION_DECISION_THRESHOLD+1;
     for (int j=0;j<ORDER_VALUE_PREDICTOR;j++) 
     {
       value_prediction_table[i].ValueHistoryArray[j] = INVALID_VALUE_HISTORY_ENTRY;
@@ -789,11 +771,10 @@ int getSizeValueHistoryArray(sqword_t PCAddress)
 }
 
 
-sqword_t value_history_ptr[ORDER_VALUE_PREDICTOR];
-
 /* Calculate the predicted value */
 sqword_t getPredictedValue(sqword_t PCAddress)
 {  
+  sqword_t value_history_ptr[ORDER_VALUE_PREDICTOR];
 
   for (int i=0;i<ORDER_VALUE_PREDICTOR;i++) 
   {
@@ -816,8 +797,10 @@ sqword_t getPredictedValue(sqword_t PCAddress)
     // Search for a number with maximum occurences and return it , if the difference is not set
     // If the difference is set ( that means it is a stride with constant value difference ) then return the same 
     sqword_t maxOccurencesIndexVal = value_history_ptr[0];
-    if (diffNotSet == 1) {
-      for (int i=0;i<=LastIndex;i++) {
+    if (diffNotSet == 1) 
+    {
+      for (int i=0;i<=LastIndex;i++) 
+      {
         if (value_history_ptr[i] != INVALID_VALUE_HISTORY_ENTRY)
         {
           num_occurences[i] = num_occurences[i] + 1;
@@ -905,7 +888,7 @@ void updateValuePredictionTable(sqword_t PCAddress , sqword_t predictedValue , s
       value_prediction_table[GET_INDEX(PCAddress)].numNonPredictions++;    
     }
   }
-  fprintf(stderr, "PrT : PCAddress : %08p , numCorrectPredictions : %08p , numMisCorrectPredictions : %08p , numNonPredictions : %08p , ActualVal : %08p , PredictedVal : %08p \n" , PCAddress , value_prediction_table[GET_INDEX(PCAddress)].numCorrectPredictions , value_prediction_table[GET_INDEX(PCAddress)].numMisCorrectPredictions , value_prediction_table[GET_INDEX(PCAddress)].numNonPredictions , actualValue , predictedValue);
+  //fprintf(stderr, "PrT : PCAddress : %08p , numCorrectPredictions : %08p , numMisCorrectPredictions : %08p , numNonPredictions : %08p , ActualVal : %08p , PredictedVal : %08p \n" , PCAddress , value_prediction_table[GET_INDEX(PCAddress)].numCorrectPredictions , value_prediction_table[GET_INDEX(PCAddress)].numMisCorrectPredictions , value_prediction_table[GET_INDEX(PCAddress)].numNonPredictions , actualValue , predictedValue);
 
 }
 
@@ -927,9 +910,87 @@ void DisplayPredictionTable()
 {
   for(int i=0;i<NUM_VALUE_PREDICTION_TABLE_ENTRIES;i++)
   {
-    fprintf(stderr, "index : %d ,  num_correct_predictions : %08p , num_incorrect_predictions : %08p , validBit : %d \n" , i , \ 
-              value_prediction_table[i].numCorrectPredictions , value_prediction_table[i].numMisCorrectPredictions , value_prediction_table[i].ValidBit );
+      if (value_prediction_table[i].ValidBit == 1) {
+        fprintf(stderr, "PrT : index : %08p ,  num_correct_predictions : %08p , num_incorrect_predictions : %08p , num_non_predictions : %08p , validBit : %d \n", i, \
+                  value_prediction_table[i].numCorrectPredictions , value_prediction_table[i].numMisCorrectPredictions , value_prediction_table[i].numNonPredictions , value_prediction_table[i].ValidBit );
+        fprintf(stderr,"VHA : ");
+        for (int j = 0; j < ORDER_VALUE_PREDICTOR; j++)
+        {
+          fprintf(stderr,"%08p",value_prediction_table[i].ValueHistoryArray[j]); 
+          fprintf(stderr,",");
+        }
+        fprintf(stderr,"\n");
+      }
   }
+}
+
+#define HACK_LAST_INST_MAGIC_NUMBER 218831
+
+// Simple Test Case to test the working of load value predictor algorithm . 
+void TestLoadValuePredictor()
+{
+  InitPredictionTable();
+  updateValuePredictionTable(0x1,getPredictedValue(0x1),0x1);
+  if (getPredictedValue(0x1) != 1) {
+    fprintf(stderr, "TC-PrT Fails 1 \n " );
+  }
+  updateValuePredictionTable(0x1, getPredictedValue(0x1), 0x1);
+  if (getPredictedValue(0x1) != 1) {
+    fprintf(stderr, "TC-PrT Fails 2 \n" );
+  }
+  updateValuePredictionTable(0x1, getPredictedValue(0x1), 0x1);
+  if (getPredictedValue(0x1) != 1) {
+    fprintf(stderr, "TC-PrT Fails 3 \n" );
+  }
+  updateValuePredictionTable(0x1, getPredictedValue(0x1), 0x1);
+  if (getPredictedValue(0x1) != 1) {
+    fprintf(stderr, "TC-PrT Fails 4 \n" );
+  }
+  updateValuePredictionTable(0x1, getPredictedValue(0x1), 0x1);
+  if (getPredictedValue(0x1) != 1) {
+    fprintf(stderr, "TC-PrT Fails 5 \n" );
+  }
+  updateValuePredictionTable(0x1, getPredictedValue(0x1), 0x2);
+  if (getPredictedValue(0x1) != 1) {
+    fprintf(stderr, "TC-PrT Fails 6 \n" );
+  }
+  updateValuePredictionTable(0x1, getPredictedValue(0x1), 0x2);
+  if (getPredictedValue(0x1) != 1) {
+    fprintf(stderr, "TC-PrT Fails 7 \n" );
+  }
+  updateValuePredictionTable(0x1, getPredictedValue(0x1), 0x2);
+  if (getPredictedValue(0x1) != 2) {
+    fprintf(stderr, "TC-PrT Fails 8 \n" );
+  }
+  updateValuePredictionTable(0x2, getPredictedValue(0x2), 0x1);
+  if (getPredictedValue(0x2) != 1) {
+    fprintf(stderr, "TC-PrT Fails 9 \n" );
+  }
+  updateValuePredictionTable(0x2, getPredictedValue(0x2), 0x2);
+  if (getPredictedValue(0x2) != 1) {
+    fprintf(stderr, "TC-PrT Fails 10 \n" );
+  }
+  updateValuePredictionTable(0x2, getPredictedValue(0x2), 0x3);
+  if (getPredictedValue(0x2) != 3) {
+    fprintf(stderr, "TC-PrT Fails 11 \n" );
+  }
+  updateValuePredictionTable(0x2, getPredictedValue(0x2), 0x4);
+  if (getPredictedValue(0x2) != 4) {
+    fprintf(stderr, "TC-PrT Fails 12 \n" );
+  }
+  updateValuePredictionTable(0x2, getPredictedValue(0x2), 0x5);
+  if (getPredictedValue(0x2) != 5) {
+    fprintf(stderr, "TC-PrT Fails 13 \n" );
+  }
+  updateValuePredictionTable(0x2, getPredictedValue(0x2), 0x1);
+  if (getPredictedValue(0x2) != 1) {
+    fprintf(stderr, "TC-PrT Fails 14 \n" );
+  }
+  updateValuePredictionTable(0x2, getPredictedValue(0x2), 0x1);
+  if (getPredictedValue(0x2) != 1) {
+    fprintf(stderr, "TC-PrT Fails 15 \n" );
+  }
+  DisplayPredictionTable();
 }
 
 /* start simulation, program loaded, processor precise state initialized */
@@ -942,7 +1003,7 @@ sim_main(void)
   enum md_opcode op;
   register int is_write;
   enum md_fault_type fault;
-
+  TestLoadValuePredictor();
   fprintf(stderr, "sim: ** starting functional simulation w/ caches **\n");
 
   /* set up initial default next PC */
@@ -960,6 +1021,14 @@ sim_main(void)
 #ifdef TARGET_ALPHA
       regs.regs_F.d[MD_REG_ZERO] = 0.0;
 #endif /* TARGET_ALPHA */
+      
+      // SImple hack to print the prediction table at the end of all instructions by
+      // finding number of instructions and checking whether it is touching the 
+      // last instruction
+
+      if (sim_num_insn  == HACK_LAST_INST_MAGIC_NUMBER) {
+        DisplayPredictionTable(); 
+      }
 
       /* get the next instruction to execute */
       if (itlb)
@@ -1019,7 +1088,7 @@ sim_main(void)
         _valFp = FPR(RA);
         //fprintf(stderr, "PC : regs.regs_PC : %08p ,  Address : %08p , int Val : %08p , Floating point Val : %08p \n" , regs.regs_PC , _address , _valint , _valFp);
         updateValuePredictionTable(regPC,getPredictedValue(regPC),_valint); 
-         }
+      }
 
 	  if (MD_OP_FLAGS(op) & F_STORE)
 	    is_write = TRUE;
@@ -1052,17 +1121,10 @@ sim_main(void)
       regs.regs_PC = regs.regs_NPC;
       regs.regs_NPC += sizeof(md_inst_t);
 
-
       /* finish early? */
       if (max_insts && sim_num_insn >= max_insts)
       {
-        fprintf(stderr, "VIKASV");
-        DisplayPredictionTable();
         return;
       }
     }
-    
-    fprintf(stderr, "VIKASV");
-    DisplayPredictionTable();
-
 }

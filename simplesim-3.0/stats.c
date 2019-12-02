@@ -59,6 +59,7 @@
 #include "machine.h"
 #include "eval.h"
 #include "stats.h"
+#include "cache.h"
 
 /* evaluate a stat as an expression */
 struct eval_value_t
@@ -1009,6 +1010,7 @@ stat_print_stats(struct stat_sdb_t *sdb,/* stat database */
 
   for (stat=sdb->stats; stat != NULL; stat=stat->next)
     stat_print_stat(sdb, stat, fd);
+
 }
 
 /* find a stat variable, returns NULL if it is not found */

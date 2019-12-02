@@ -73,6 +73,8 @@
 #define MD_CROSS_ENDIAN
 #endif
 
+void DisplayPredictionTable();
+
 /* not applicable/available, usable in most definition contexts */
 #define NA		0
 

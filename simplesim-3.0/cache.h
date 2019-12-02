@@ -98,6 +98,30 @@
    speed block access, this macro decides if a cache is "highly associative" */
 #define CACHE_HIGHLY_ASSOC(cp)	((cp)->assoc > 4)
 
+
+/* For the history order to work correctly it should be either 1 or some value greater than 4 */
+#define ORDER_VALUE_PREDICTOR 5
+
+/* Number of entries in value prediction table */
+#define NUM_VALUE_PREDICTION_TABLE_ENTRIES 8192
+
+/* Value Prediction History Table indexed by Program counter */
+typedef struct
+{
+  sqword_t PredictionHysterisCounter;  /*< Stores the prediction state history >*/
+  sqword_t ValuePredicted;   /*< Returns the Value Predicted based on Value History buffer >*/
+  #define INVALID_VALUE_HISTORY_ENTRY 0x5a5a5a5a
+  sqword_t ValueHistoryArray[ORDER_VALUE_PREDICTOR];  /*< Value History Array which would be used to make a prediction */
+  int ValidBit;
+  int numCorrectPredictions;
+  int numMisCorrectPredictions;
+  int numNonPredictions;
+} value_prediction_table_entry_t;
+
+
+extern value_prediction_table_entry_t value_prediction_table[NUM_VALUE_PREDICTION_TABLE_ENTRIES];
+
+
 /* cache replacement policy */
 enum cache_policy {
   LRU,		/* replace least recently used block (perfect LRU) */

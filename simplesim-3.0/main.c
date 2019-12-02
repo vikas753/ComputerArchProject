@@ -415,7 +415,6 @@ main(int argc, char **argv, char **envp)
 
   running = TRUE;
   sim_main();
-
   /* simulation finished early */
   exit_now(0);
 

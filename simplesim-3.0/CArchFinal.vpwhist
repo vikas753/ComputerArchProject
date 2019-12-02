@@ -4,3 +4,11 @@ CurrentProject=CArchFinal.vpj
 CArchFinal.vpj=20191130221954029
 [ActiveConfig]
 CArchFinal.vpj=Debug
+[TreeExpansion2]
+-@ CArchFinal.vpj
+  - Source Files
+  + Header Files
+  + Resource Files
+  + Bitmaps
+  - Other Files
+scroll:15
