@@ -100,7 +100,9 @@
 
 
 /* For the history order to work correctly it should be either 1 or some value greater than 4 */
-#define ORDER_VALUE_PREDICTOR 5
+#define ORDER_VALUE_PREDICTOR 6
+#define MAX_WINDOW_SIZE_OF_SEQUENCE_VALUE_PREDICTOR (ORDER_VALUE_PREDICTOR >> 1)
+#define MIN_WINDOW_SIZE_OF_SEQUENCE_VALUE_PREDICTOR 2
 
 /* Number of entries in value prediction table */
 #define NUM_VALUE_PREDICTION_TABLE_ENTRIES 8192

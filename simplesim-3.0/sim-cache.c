@@ -748,7 +748,7 @@ void InitPredictionTable()
 {
   for (int i=0;i<NUM_VALUE_PREDICTION_TABLE_ENTRIES;i++) 
   {
-    value_prediction_table[i].PredictionHysterisCounter = MID_PREDICTION_DECISION_THRESHOLD+1;
+    value_prediction_table[i].PredictionHysterisCounter = MID_PREDICTION_DECISION_THRESHOLD;
     for (int j=0;j<ORDER_VALUE_PREDICTOR;j++) 
     {
       value_prediction_table[i].ValueHistoryArray[j] = INVALID_VALUE_HISTORY_ENTRY;
@@ -764,7 +764,6 @@ int getSizeValueHistoryArray(sqword_t PCAddress)
     if(value_prediction_table[GET_INDEX(PCAddress)].ValueHistoryArray[i] != INVALID_VALUE_HISTORY_ENTRY)
     {
       size++;
-      value_prediction_table[GET_INDEX(PCAddress)].ValueHistoryArray[i];
     }
   }
   return size;
@@ -780,24 +779,90 @@ sqword_t getPredictedValue(sqword_t PCAddress)
   {
     value_history_ptr[i] = value_prediction_table[GET_INDEX(PCAddress)].ValueHistoryArray[i];
   }
-  int LastIndex = getSizeValueHistoryArray(PCAddress);
-  if (LastIndex > MIN_ORDER_VALUE_PREDICTOR) 
+
+  int LastIndex = getSizeValueHistoryArray(PCAddress)-1;
+
+  // Checkout for any working sequence ( like 1,2,3,4,5 or 1,3,5,7 .. )
+  if (LastIndex >= MIN_ORDER_VALUE_PREDICTOR) 
   {
     sqword_t num_occurences[ORDER_VALUE_PREDICTOR];
     sqword_t diffValHistoryTableEntries = value_history_ptr[1] - value_history_ptr[0];
-    int diffNotSet = 0 , maxOccurencesIndex = 0 , maxOccurencesVal = 0;
-
-    for (int i=0;i <= LastIndex;i++) {
+    int checkFurtherSeries = 0 , maxOccurencesIndex = 0 , maxOccurencesVal = 0;
+    for (int i=0;i <= LastIndex;i++) 
+    {
+      if (value_history_ptr[i + 1] == INVALID_VALUE_HISTORY_ENTRY) 
+      {
+        break;
+      }
       if ((value_history_ptr[i + 1] - value_history_ptr[i]) != diffValHistoryTableEntries)
       {
-        diffNotSet = 1;    
+        checkFurtherSeries = 1;    
       }  
     }
+    
+    // Search for a repetition of a group of numbers ( say AB AB AB or ABC ABC for history
+    // size of 6 )
+    if (checkFurtherSeries == 1) 
+    {
+      checkFurtherSeries = 0;
+      int maxWindowSizeSeqPredictor = ((LastIndex+1) >> 1);
+      for (int windowSize=MIN_WINDOW_SIZE_OF_SEQUENCE_VALUE_PREDICTOR;windowSize <= \
+              maxWindowSizeSeqPredictor;) 
+      {
+        for (int i=0;i<=LastIndex;) 
+        {
+          int j=i+windowSize,innerLoopIter = i;
+          int maxWindowSize = j+windowSize;
+          
+          for (;((j < maxWindowSize) && (j <=LastIndex)) ;)
+          {
+            if(value_history_ptr[innerLoopIter] != value_history_ptr[j])
+            {
+              checkFurtherSeries = 1;
+            }
+            j++;
+            innerLoopIter++;
+          }
+          i = i+windowSize;
+        }
+        if (checkFurtherSeries == 1) 
+        {
+          checkFurtherSeries = 0;
+          windowSize++;
+        }
+        else
+        {
+          return value_history_ptr[((LastIndex+1) % windowSize)];
+        }
+      }
+    }
 
+    // CHeck if it exhibits any kind of multiplication in a sequence ( like A 2A 4A or A 3A 9A , etc.., )
+    if (checkFurtherSeries == 1) 
+    {
+      checkFurtherSeries = 0;
+      sqword_t commonFactorValHistoryTableEntries = (value_history_ptr[1]/value_history_ptr[0]);
+      for (int i=0;i <= LastIndex;i++) 
+      {
+        if (value_history_ptr[i + 1] == INVALID_VALUE_HISTORY_ENTRY) 
+        {
+          break;
+        }
+        if ((value_history_ptr[i + 1]/value_history_ptr[i]) != commonFactorValHistoryTableEntries)
+        {
+          checkFurtherSeries = 1;    
+        }  
+      }
+      if (checkFurtherSeries == 0) 
+      {
+        return (value_history_ptr[LastIndex]*commonFactorValHistoryTableEntries);
+      }
+    }
+   
     // Search for a number with maximum occurences and return it , if the difference is not set
     // If the difference is set ( that means it is a stride with constant value difference ) then return the same 
     sqword_t maxOccurencesIndexVal = value_history_ptr[0];
-    if (diffNotSet == 1) 
+    if (checkFurtherSeries == 1) 
     {
       for (int i=0;i<=LastIndex;i++) 
       {
@@ -840,53 +905,73 @@ sqword_t getPredictedValue(sqword_t PCAddress)
   }
 }
 
+// State machines track the statistics of load value predictor
+// like number of correct , incorrect and non predictions
+int TotalNumberOfCorrectPredictions = 0;
+int TotalNumberOfInCorrectPredictions = 0;
+int TotalNumberOfNonPredictions = 0;
+
 // Update the value prediction table with required values being pushed 
 // and prediction history state machine being updated
 void updateValuePredictionTable(sqword_t PCAddress , sqword_t predictedValue , sqword_t actualValue)
 {
   value_prediction_table[GET_INDEX(PCAddress)].ValidBit = 1;
   int sizeVHArray = getSizeValueHistoryArray(PCAddress);
-
+  
   if (sizeVHArray < (ORDER_VALUE_PREDICTOR-1)) 
   {
     value_prediction_table[GET_INDEX(PCAddress)].ValueHistoryArray[sizeVHArray] = actualValue;   
   }
+  else if ((sizeVHArray == (ORDER_VALUE_PREDICTOR - 1)) && (value_prediction_table[GET_INDEX(PCAddress)].ValueHistoryArray[sizeVHArray] == INVALID_VALUE_HISTORY_ENTRY)) 
+  {
+    value_prediction_table[GET_INDEX(PCAddress)].ValueHistoryArray[sizeVHArray] = actualValue;
+  }
   else
   {
-    for (int i = 0; i < (ORDER_VALUE_PREDICTOR - 1); i++)
+    for (int i = 0; i < (ORDER_VALUE_PREDICTOR-1); i++)
     {
       value_prediction_table[GET_INDEX(PCAddress)].ValueHistoryArray[i] = value_prediction_table[GET_INDEX(PCAddress)].ValueHistoryArray[i+1]; 
     }
     value_prediction_table[GET_INDEX(PCAddress)].ValueHistoryArray[ORDER_VALUE_PREDICTOR - 1] = actualValue;
   }
   
-
-  if (actualValue == predictedValue) {
-    value_prediction_table[GET_INDEX(PCAddress)].PredictionHysterisCounter = (value_prediction_table[GET_INDEX(PCAddress)].PredictionHysterisCounter + 1) & SATURATING_COUNTER_MASK;
+  if (actualValue == predictedValue) 
+  {
     if(GetPredictionDecision(PCAddress) != NO_PREDICTION)
     {
+      TotalNumberOfCorrectPredictions++;
       value_prediction_table[GET_INDEX(PCAddress)].numCorrectPredictions++; 
     }
     else
     {
+      TotalNumberOfNonPredictions++;
       value_prediction_table[GET_INDEX(PCAddress)].numNonPredictions++;
+    }
+    value_prediction_table[GET_INDEX(PCAddress)].PredictionHysterisCounter = value_prediction_table[GET_INDEX(PCAddress)].PredictionHysterisCounter + 1; 
+
+    if(value_prediction_table[GET_INDEX(PCAddress)].PredictionHysterisCounter > SATURATING_COUNTER_MASK)
+    {
+      value_prediction_table[GET_INDEX(PCAddress)].PredictionHysterisCounter = SATURATING_COUNTER_MASK;
     }
   }
   else
   {
+    if(GetPredictionDecision(PCAddress) != NO_PREDICTION)
+    {
+      TotalNumberOfInCorrectPredictions++;
+      value_prediction_table[GET_INDEX(PCAddress)].numMisCorrectPredictions++;
+    }
+    else
+    {
+      TotalNumberOfNonPredictions++;
+      value_prediction_table[GET_INDEX(PCAddress)].numNonPredictions++;    
+    }
     value_prediction_table[GET_INDEX(PCAddress)].PredictionHysterisCounter = (value_prediction_table[GET_INDEX(PCAddress)].PredictionHysterisCounter - 1);
     if(value_prediction_table[GET_INDEX(PCAddress)].PredictionHysterisCounter < 0)
     {
       value_prediction_table[GET_INDEX(PCAddress)].PredictionHysterisCounter = 0;
     }
-    if(GetPredictionDecision(PCAddress) != NO_PREDICTION)
-    {
-      value_prediction_table[GET_INDEX(PCAddress)].numMisCorrectPredictions++;
-    }
-    else
-    {
-      value_prediction_table[GET_INDEX(PCAddress)].numNonPredictions++;    
-    }
+
   }
   //fprintf(stderr, "PrT : PCAddress : %08p , numCorrectPredictions : %08p , numMisCorrectPredictions : %08p , numNonPredictions : %08p , ActualVal : %08p , PredictedVal : %08p \n" , PCAddress , value_prediction_table[GET_INDEX(PCAddress)].numCorrectPredictions , value_prediction_table[GET_INDEX(PCAddress)].numMisCorrectPredictions , value_prediction_table[GET_INDEX(PCAddress)].numNonPredictions , actualValue , predictedValue);
 
@@ -911,85 +996,340 @@ void DisplayPredictionTable()
   for(int i=0;i<NUM_VALUE_PREDICTION_TABLE_ENTRIES;i++)
   {
       if (value_prediction_table[i].ValidBit == 1) {
-        fprintf(stderr, "PrT : index : %08p ,  num_correct_predictions : %08p , num_incorrect_predictions : %08p , num_non_predictions : %08p , validBit : %d \n", i, \
+        //fprintf(stderr, "PrT : index : %08p ,  num_correct_predictions : %08p , num_incorrect_predictions : %08p , num_non_predictions : %08p , validBit : %d \n", i, \
                   value_prediction_table[i].numCorrectPredictions , value_prediction_table[i].numMisCorrectPredictions , value_prediction_table[i].numNonPredictions , value_prediction_table[i].ValidBit );
-        fprintf(stderr,"VHA : ");
+        //fprintf(stderr,"VHA : ");
         for (int j = 0; j < ORDER_VALUE_PREDICTOR; j++)
         {
-          fprintf(stderr,"%08p",value_prediction_table[i].ValueHistoryArray[j]); 
-          fprintf(stderr,",");
+          //fprintf(stderr,"%08p",value_prediction_table[i].ValueHistoryArray[j]); 
+          //fprintf(stderr,",");
         }
-        fprintf(stderr,"\n");
+        //fprintf(stderr,"\n");
       }
   }
+  fprintf(stderr, "PrT : total_num_correct_predictions : %d , total_num_incorrect_predictions : %d , total_num_non_predictions : %d \n", \
+                   TotalNumberOfCorrectPredictions , TotalNumberOfInCorrectPredictions , TotalNumberOfNonPredictions);
 }
 
-#define HACK_LAST_INST_MAGIC_NUMBER 218831
 
 // Simple Test Case to test the working of load value predictor algorithm . 
 void TestLoadValuePredictor()
 {
   InitPredictionTable();
-  updateValuePredictionTable(0x1,getPredictedValue(0x1),0x1);
-  if (getPredictedValue(0x1) != 1) {
-    fprintf(stderr, "TC-PrT Fails 1 \n " );
+  sqword_t PredictedValue = getPredictedValue(0x1);
+  updateValuePredictionTable(0x1,PredictedValue,0x1);
+  if (PredictedValue == 1) {
+    fprintf(stderr, "TC-PrT Passes 1 , predictedValue : %d \n " , PredictedValue);
   }
-  updateValuePredictionTable(0x1, getPredictedValue(0x1), 0x1);
-  if (getPredictedValue(0x1) != 1) {
-    fprintf(stderr, "TC-PrT Fails 2 \n" );
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 1 , predictedValue : %d \n " ,  PredictedValue);
   }
-  updateValuePredictionTable(0x1, getPredictedValue(0x1), 0x1);
-  if (getPredictedValue(0x1) != 1) {
-    fprintf(stderr, "TC-PrT Fails 3 \n" );
+  PredictedValue = getPredictedValue(0x1);
+  updateValuePredictionTable(0x1, PredictedValue, 0x1);
+  if (PredictedValue == 1) {
+    fprintf(stderr, "TC-PrT Passes 2 , predictedValue : %d \n " ,  PredictedValue );
   }
-  updateValuePredictionTable(0x1, getPredictedValue(0x1), 0x1);
-  if (getPredictedValue(0x1) != 1) {
-    fprintf(stderr, "TC-PrT Fails 4 \n" );
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 2 , predictedValue : %d \n " ,  PredictedValue);
   }
-  updateValuePredictionTable(0x1, getPredictedValue(0x1), 0x1);
-  if (getPredictedValue(0x1) != 1) {
-    fprintf(stderr, "TC-PrT Fails 5 \n" );
+  PredictedValue = getPredictedValue(0x1);
+  updateValuePredictionTable(0x1, PredictedValue, 0x1);
+  if (PredictedValue == 1) {
+    fprintf(stderr, "TC-PrT Passes 3 , predictedValue : %d \n " ,  PredictedValue );
   }
-  updateValuePredictionTable(0x1, getPredictedValue(0x1), 0x2);
-  if (getPredictedValue(0x1) != 1) {
-    fprintf(stderr, "TC-PrT Fails 6 \n" );
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 3 , predictedValue : %d \n " ,  PredictedValue);
   }
-  updateValuePredictionTable(0x1, getPredictedValue(0x1), 0x2);
-  if (getPredictedValue(0x1) != 1) {
-    fprintf(stderr, "TC-PrT Fails 7 \n" );
+  
+  PredictedValue = getPredictedValue(0x1);
+
+  updateValuePredictionTable(0x1, PredictedValue, 0x1);
+  if (PredictedValue == 1) {
+    fprintf(stderr, "TC-PrT Passes 4 , predictedValue : %d \n " ,  PredictedValue );
   }
-  updateValuePredictionTable(0x1, getPredictedValue(0x1), 0x2);
-  if (getPredictedValue(0x1) != 2) {
-    fprintf(stderr, "TC-PrT Fails 8 \n" );
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 4 , predictedValue : %d \n " ,  PredictedValue);
   }
-  updateValuePredictionTable(0x2, getPredictedValue(0x2), 0x1);
-  if (getPredictedValue(0x2) != 1) {
-    fprintf(stderr, "TC-PrT Fails 9 \n" );
+
+  PredictedValue = getPredictedValue(0x1);
+
+  updateValuePredictionTable(0x1, PredictedValue, 0x1);
+  if (PredictedValue == 1) {
+    fprintf(stderr, "TC-PrT Passes 5 , predictedValue : %d \n " ,  PredictedValue );
   }
-  updateValuePredictionTable(0x2, getPredictedValue(0x2), 0x2);
-  if (getPredictedValue(0x2) != 1) {
-    fprintf(stderr, "TC-PrT Fails 10 \n" );
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 5 , predictedValue : %d \n " ,  PredictedValue);
   }
-  updateValuePredictionTable(0x2, getPredictedValue(0x2), 0x3);
-  if (getPredictedValue(0x2) != 3) {
-    fprintf(stderr, "TC-PrT Fails 11 \n" );
+
+  PredictedValue = getPredictedValue(0x1);
+
+  updateValuePredictionTable(0x1, PredictedValue, 0x2);
+  if (PredictedValue == 1) {
+    fprintf(stderr, "TC-PrT Passes 6 , predictedValue : %d \n " ,  PredictedValue );
   }
-  updateValuePredictionTable(0x2, getPredictedValue(0x2), 0x4);
-  if (getPredictedValue(0x2) != 4) {
-    fprintf(stderr, "TC-PrT Fails 12 \n" );
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 6 , predictedValue : %d \n " ,  PredictedValue);
   }
-  updateValuePredictionTable(0x2, getPredictedValue(0x2), 0x5);
-  if (getPredictedValue(0x2) != 5) {
-    fprintf(stderr, "TC-PrT Fails 13 \n" );
+
+  PredictedValue = getPredictedValue(0x1);
+
+  updateValuePredictionTable(0x1, PredictedValue, 0x2);
+  if (PredictedValue == 2) {
+    fprintf(stderr, "TC-PrT Passes 7 , predictedValue : %d \n " ,  PredictedValue);
   }
-  updateValuePredictionTable(0x2, getPredictedValue(0x2), 0x1);
-  if (getPredictedValue(0x2) != 1) {
-    fprintf(stderr, "TC-PrT Fails 14 \n" );
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 7 , predictedValue : %d \n " ,  PredictedValue);
   }
-  updateValuePredictionTable(0x2, getPredictedValue(0x2), 0x1);
-  if (getPredictedValue(0x2) != 1) {
-    fprintf(stderr, "TC-PrT Fails 15 \n" );
+
+  PredictedValue = getPredictedValue(0x1);
+
+  updateValuePredictionTable(0x1, PredictedValue, 0x2);
+  if (PredictedValue == 2) {
+    fprintf(stderr, "TC-PrT Passes 8 , predictedValue : %d \n " ,  PredictedValue);
   }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 8 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x2);
+
+  updateValuePredictionTable(0x2, PredictedValue, 0x1);
+  if (PredictedValue == 1) {
+    fprintf(stderr, "TC-PrT Passes 9 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 9 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x2);
+
+  updateValuePredictionTable(0x2, PredictedValue, 0x3);
+  if (PredictedValue == 3) {
+    fprintf(stderr, "TC-PrT Passes 10 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 10 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x2);
+
+  updateValuePredictionTable(0x2, PredictedValue, 0x5);
+  if (PredictedValue == 5) {
+    fprintf(stderr, "TC-PrT Passes 11 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 11 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x2);
+
+  updateValuePredictionTable(0x2, PredictedValue, 0x7);
+  if (PredictedValue == 7) {
+    fprintf(stderr, "TC-PrT Passes 12 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 12 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x2);
+
+  updateValuePredictionTable(0x2, PredictedValue, 0x9);
+  if (PredictedValue == 9) {
+    fprintf(stderr, "TC-PrT Passes 13 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 13 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x2);
+
+  updateValuePredictionTable(0x2, PredictedValue, 0x1);
+  if (PredictedValue == 1) {
+    fprintf(stderr, "TC-PrT Passes 14 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 14 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x2);
+
+  updateValuePredictionTable(0x2, PredictedValue, 0x1);
+  if (PredictedValue == 1) {
+    fprintf(stderr, "TC-PrT Passes 15 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 15 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x2);
+
+  updateValuePredictionTable(0x2, PredictedValue, 0x1);
+  if (PredictedValue == 1) {
+    fprintf(stderr, "TC-PrT Passes 16 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 16 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x2);
+
+  updateValuePredictionTable(0x2, PredictedValue, 0x3);
+  if (PredictedValue == 3) {
+    fprintf(stderr, "TC-PrT Passes 17 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 17 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x2);
+
+  updateValuePredictionTable(0x2, PredictedValue, 0x5);
+  if (PredictedValue == 5) {
+    fprintf(stderr, "TC-PrT Passes 18 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 18 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x2);
+
+  updateValuePredictionTable(0x2, PredictedValue, 0x7);
+  if (PredictedValue == 7) {
+    fprintf(stderr, "TC-PrT Passes 19 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 19 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x2);
+
+  updateValuePredictionTable(0x2, PredictedValue, 0x9);
+  if (PredictedValue == 9) {
+    fprintf(stderr, "TC-PrT Passes 20 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 20 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x2);
+
+  updateValuePredictionTable(0x2, PredictedValue, 0x1);
+  if (PredictedValue == 1) {
+    fprintf(stderr, "TC-PrT Passes 21 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 21 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x3);
+
+  updateValuePredictionTable(0x3, PredictedValue, 0x1);
+  if (PredictedValue == 1) {
+    fprintf(stderr, "TC-PrT Passes 22 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 22 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x3);
+
+  updateValuePredictionTable(0x3, PredictedValue, 0x2);
+  if (PredictedValue == 1) {
+    fprintf(stderr, "TC-PrT Passes 23 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 23 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x3);
+
+  updateValuePredictionTable(0x3, PredictedValue, 0x3);
+  if (PredictedValue == 1) {
+    fprintf(stderr, "TC-PrT Passes 24 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 24 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x3);
+
+  updateValuePredictionTable(0x3, PredictedValue, 0x1);
+  if (PredictedValue == 1) {
+    fprintf(stderr, "TC-PrT Passes 25 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 25 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x3); 
+
+  updateValuePredictionTable(0x3, PredictedValue, 0x2);
+  if (PredictedValue == 1) {
+    fprintf(stderr, "TC-PrT Passes 26 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 26 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x3); 
+
+  updateValuePredictionTable(0x3, PredictedValue, 0x3);
+  if (PredictedValue == 1) {
+    fprintf(stderr, "TC-PrT Passes 27 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 27 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x3); 
+
+  updateValuePredictionTable(0x3, PredictedValue, 0x1);
+  if (PredictedValue == 1) {
+    fprintf(stderr, "TC-PrT Passes 28 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 28 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
+  PredictedValue = getPredictedValue(0x3); 
+
+  updateValuePredictionTable(0x3, PredictedValue, 0x2);
+  if (PredictedValue == 3) {
+    fprintf(stderr, "TC-PrT Passes 29 , predictedValue : %d \n " ,  PredictedValue);
+  }
+  else
+  {
+    fprintf(stderr, "TC-PrT Fails 29 , predictedValue : %d \n " ,  PredictedValue);
+  }
+
   DisplayPredictionTable();
 }
 
@@ -1003,7 +1343,9 @@ sim_main(void)
   enum md_opcode op;
   register int is_write;
   enum md_fault_type fault;
-  TestLoadValuePredictor();
+  InitPredictionTable();
+
+
   fprintf(stderr, "sim: ** starting functional simulation w/ caches **\n");
 
   /* set up initial default next PC */
@@ -1026,7 +1368,10 @@ sim_main(void)
       // finding number of instructions and checking whether it is touching the 
       // last instruction
 
-      if (sim_num_insn  == HACK_LAST_INST_MAGIC_NUMBER) {
+
+#define HACK_LAST_INST_MAGIC_NUMBER 218831
+
+      if (sim_num_insn == HACK_LAST_INST_MAGIC_NUMBER) {
         DisplayPredictionTable(); 
       }
 
